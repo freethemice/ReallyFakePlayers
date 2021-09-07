@@ -1,0 +1,13 @@
+name: TitanBoxRFP
+main: com.firesoftitan.play.titanbox.rfp.TitanBoxRFP
+version: 1.4.1_171
+author: [freethemice]
+depend: [Slimefun]
+api-version: 1.13
+commands:
+  TRFP:
+    description: ReallyFakePlayerCommands
+    usage: /<command>
+  RFP:
+    description: ReallyFakePlayerCommands
+    usage: /<command>
