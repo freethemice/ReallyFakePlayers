@@ -34,18 +34,12 @@ public class TitanBoxRFP extends JavaPlugin {
         mainListener = new MainListener();
         mainListener.registerEvents();
 
-        File nfile = new File("plugins" + File.separator + this.getName() + File.separator +   "NameList.yml");
-        if (!nfile.exists())
-        {
-            InputStream link = getResource("NameList.yml");
-            try {
-                FileUtils.copyInputStreamToFile(link, nfile);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+        createMissingFile("NameList.yml");
+        createMissingFile("SkinList.yml");
+
         configManager = new ConfigManager();
         fakePlayerManager = new FakePlayerManager();
+
 
         if (configManager.isAutoEnable()) {
             Random random = new Random(System.currentTimeMillis());
@@ -73,6 +67,20 @@ public class TitanBoxRFP extends JavaPlugin {
 
         if (configManager.isAutoEnable()) new AutoLogerRunnable().runTaskTimer(this, 30*20, 30*20);
     }
+
+    public void createMissingFile(String filename) {
+        File nfile = new File("plugins" + File.separator + this.getName() + File.separator +   filename);
+        if (!nfile.exists())
+        {
+            InputStream link = getResource(filename);
+            try {
+                FileUtils.copyInputStreamToFile(link, nfile);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     public static boolean hasAdminPermission(Player player)
     {
         if (player.hasPermission("titanbox.rfp.admin") ||player.hasPermission("titanbox.admin") || player.isOp()) return true;

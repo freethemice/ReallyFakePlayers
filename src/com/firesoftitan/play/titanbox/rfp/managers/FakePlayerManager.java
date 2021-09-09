@@ -2,6 +2,7 @@ package com.firesoftitan.play.titanbox.rfp.managers;
 
 import com.firesoftitan.play.titanbox.rfp.TitanBoxRFP;
 import com.firesoftitan.play.titanbox.rfp.info.FakePlayerInfo;
+import net.minecraft.network.chat.ChatMessage;
 import net.minecraft.network.protocol.game.PacketPlayOutPlayerInfo;
 import net.minecraft.server.dedicated.DedicatedPlayerList;
 import net.minecraft.server.level.EntityPlayer;
@@ -10,7 +11,10 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.craftbukkit.v1_17_R1.CraftServer;
 import org.bukkit.craftbukkit.v1_17_R1.entity.CraftPlayer;
+import org.bukkit.craftbukkit.v1_17_R1.util.CraftChatMessage;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.lang.reflect.Field;
@@ -18,22 +22,11 @@ import java.util.*;
 public class FakePlayerManager {
 
     private HashMap<String, FakePlayerInfo> playerHashMap;
-    private List<String> playerNames;
-    private SaveManager nameList = new SaveManager(TitanBoxRFP.instants.getName(), "NameList");
 
     private List<EntityPlayer> playerListFree;
     private Map<UUID, EntityPlayer> onlineListFree;
     public FakePlayerManager() {
         playerHashMap = new HashMap<String, FakePlayerInfo>();
-        playerNames = new ArrayList<String>();
-        if (!nameList.contains("names"))
-        {
-            playerNames.add("Billy");
-            playerNames.add("Tammy");
-            nameList.set("names", playerNames, true);
-            nameList.save();
-        }
-        playerNames = nameList.getStringListFromText("names");
 
         DedicatedPlayerList playerList = ((CraftServer) Bukkit.getServer()).getServer().getPlayerList();
 
@@ -68,6 +61,7 @@ public class FakePlayerManager {
 
 
     }
+
     public List<FakePlayerInfo> getPlayerInfoList()
     {
         return new ArrayList<>(playerHashMap.values());
@@ -111,18 +105,25 @@ public class FakePlayerManager {
     {
         if (name.length() > 16) name = name.substring(0, 16);
         FakePlayerInfo npc = new FakePlayerInfo(name);
+        npc.setSkin(TitanBoxRFP.configManager.getRandomSkin());
         playerHashMap.put(name, npc);
         playerListFree.add(npc.getEntityPlayer());
         onlineListFree.put(npc.getEntityPlayer().getUniqueID(), npc.getEntityPlayer());
         //Bukkit.getServer().broadcastMessage(ChatColor.YELLOW + name + " joined the game.");
+        ChatMessage chatmessage = new ChatMessage("multiplayer.player.joined", new Object[]{npc.getEntityPlayer().getScoreboardDisplayName()});
+        String joinMessage = CraftChatMessage.fromComponent(chatmessage);
+        PlayerJoinEvent playerJoinEvent = new PlayerJoinEvent(npc.getCraftPlayer(), joinMessage);
+        Bukkit.getPluginManager().callEvent(playerJoinEvent);
+        joinMessage = ChatColor.YELLOW + ChatColor.translateAlternateColorCodes('&',playerJoinEvent.getJoinMessage());
+
         Set<Player> playerSet = new HashSet<Player>(Bukkit.getOnlinePlayers());
         for(Player player: playerSet) {
             if (TitanBoxRFP.hasAdminPermission(player) || player.hasPermission("titanbox.rfp.show")) {
-                player.sendMessage(ChatColor.YELLOW + name + " joined the game." + ChatColor.GRAY + " [Fake Player]");
+                player.sendMessage(joinMessage + " [Fake Player]");
             }
             else
             {
-                player.sendMessage(ChatColor.YELLOW + name + " joined the game.");
+                player.sendMessage(joinMessage);
             }
         }
         if (welcome) this.welcomePlayer(npc.getCraftPlayer());
@@ -154,29 +155,30 @@ public class FakePlayerManager {
             remove(pl);
         }
     }
-    public void remove(FakePlayerInfo pl)
+    public void remove(FakePlayerInfo npc)
     {
-        if (pl != null)
+        if (npc != null)
         {
-            if (pl.getName().equalsIgnoreCase(pl.getName().toLowerCase())) {
-                this.playerNames.remove(pl.getName());
-                this.playerHashMap.remove(pl.getName());
+            if (npc.getName().equalsIgnoreCase(npc.getName().toLowerCase())) {
+                this.playerHashMap.remove(npc.getName());
 
-                this.playerListFree.remove(pl.getEntityPlayer());
-                this.onlineListFree.remove(pl.getUniqueID());
+                this.playerListFree.remove(npc.getEntityPlayer());
+                this.onlineListFree.remove(npc.getUniqueID());
                 for(Player all: Bukkit.getOnlinePlayers()) {
-                    ((CraftPlayer) all).getHandle().b.sendPacket(new PacketPlayOutPlayerInfo(PacketPlayOutPlayerInfo.EnumPlayerInfoAction.e, pl.getEntityPlayer())); //REMOVE PLAYER
+                    ((CraftPlayer) all).getHandle().b.sendPacket(new PacketPlayOutPlayerInfo(PacketPlayOutPlayerInfo.EnumPlayerInfoAction.e, npc.getEntityPlayer())); //REMOVE PLAYER
                 }
-                //PlayerQuitEvent event = new PlayerQuitEvent(pl.getCraftPlayer(), "Not real");
-                //Bukkit.getPluginManager().callEvent(event);
+                PlayerQuitEvent playerQuitEvent = new PlayerQuitEvent(npc.getCraftPlayer(), "§e" + npc.getName() + " left the game");
+                Bukkit.getPluginManager().callEvent(playerQuitEvent);
+                String quitMessage = ChatColor.translateAlternateColorCodes('&',playerQuitEvent.getQuitMessage());
+
                 Set<Player> playerSet = new HashSet<Player>(Bukkit.getOnlinePlayers());
                 for(Player player: playerSet) {
                     if (TitanBoxRFP.hasAdminPermission(player) || player.hasPermission("titanbox.rfp.show")) {
-                        player.sendMessage(ChatColor.YELLOW + pl.getName() + " left the game." + ChatColor.GRAY + " [Fake Player]");
+                        player.sendMessage(quitMessage + ChatColor.GRAY + " [Fake Player]");
                     }
                     else
                     {
-                        player.sendMessage(ChatColor.YELLOW + pl.getName() + " left the game.");
+                        player.sendMessage(quitMessage);
                     }
                 }
             }
@@ -203,6 +205,7 @@ public class FakePlayerManager {
     }
     private String getRandomName(int count)
     {
+        List<String> playerNames = TitanBoxRFP.configManager.getNameList();
         count++;
         Random random = new Random(System.currentTimeMillis());
         int nameIndex = random.nextInt(playerNames.size());

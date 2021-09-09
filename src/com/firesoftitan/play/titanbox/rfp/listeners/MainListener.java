@@ -11,9 +11,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
-import org.bukkit.event.player.PlayerCommandPreprocessEvent;
-import org.bukkit.event.player.PlayerLoginEvent;
+import org.bukkit.event.player.*;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -31,7 +29,6 @@ public class MainListener  implements Listener {
         PluginManager pm = TitanBoxRFP.instants.getServer().getPluginManager();
         pm.registerEvents(this, TitanBoxRFP.instants);
     }
-
     @EventHandler
     public static void onPlayerLoginEvent(PlayerLoginEvent event)
     {
@@ -51,10 +48,20 @@ public class MainListener  implements Listener {
                     formatted = formatted.replace(player.getName(), "<fakename>");
                     formatted = formatted.replace('§', '&');
                     TitanBoxRFP.configManager.setTextFormat(formatted);
+
                 }
             }.runTaskLater(TitanBoxRFP.instants, 3);
 
         }
+
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                //PlayerJoinEvent playerJoinEvent = new PlayerJoinEvent(player, "");
+                //Bukkit.getPluginManager().callEvent(playerJoinEvent);
+                //TitanBoxRFP.sendMessageSystem(TitanBoxRFP.instants, playerJoinEvent.getJoinMessage());
+            }
+        }.runTaskLater(TitanBoxRFP.instants, 3);
 
         fakePlayerManager.remove(player.getName());
         new BukkitRunnable() {

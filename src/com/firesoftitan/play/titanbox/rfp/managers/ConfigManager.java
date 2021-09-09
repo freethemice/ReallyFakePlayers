@@ -4,6 +4,8 @@ import com.firesoftitan.play.titanbox.rfp.TitanBoxRFP;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
+import java.util.UUID;
 
 public class ConfigManager {
     private SaveManager configFile;
@@ -18,6 +20,8 @@ public class ConfigManager {
     private List<String> firstJoinMessages;
     private List<String> reJoinMessages;
     private String textFormat = null;
+    private SaveManager nameList = new SaveManager(TitanBoxRFP.instants.getName(), "NameList");
+    private SaveManager skinList = new SaveManager(TitanBoxRFP.instants.getName(), "SkinList");
     public ConfigManager() {
         configFile = new SaveManager(TitanBoxRFP.instants.getName(), "config");
         if (!configFile.contains("settings.maximum"))
@@ -92,7 +96,20 @@ public class ConfigManager {
 
         configFile.save();
     }
-
+    public List<String> getNameList()
+    {
+        return nameList.getStringListFromText("names");
+    }
+    public List<UUID> getSkinList()
+    {
+        List<String> skins = skinList.getStringListFromText("skins");
+        List<UUID> uuids = new ArrayList<UUID>();
+        for(String s: skins)
+        {
+            uuids.add(UUID.fromString(s));
+        }
+        return uuids;
+    }
     public String getTextFormat() {
         return textFormat;
     }
@@ -142,5 +159,12 @@ public class ConfigManager {
 
     public int getAutoMaximum() {
         return auto_maximum;
+    }
+
+    public UUID getRandomSkin() {
+        List<String> skins = skinList.getStringListFromText("skins");
+        Random random = new Random(System.currentTimeMillis());
+        int i = random.nextInt(skins.size());
+        return UUID.fromString(skins.get(i));
     }
 }
