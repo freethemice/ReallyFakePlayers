@@ -25,6 +25,7 @@ public class FakePlayerManager {
 
     private List<EntityPlayer> playerListFree;
     private Map<UUID, EntityPlayer> onlineListFree;
+    private Random random = new Random(System.currentTimeMillis());
     public FakePlayerManager() {
         playerHashMap = new HashMap<String, FakePlayerInfo>();
 
@@ -76,17 +77,24 @@ public class FakePlayerManager {
     }
     public void welcomePlayer(Player player) {
 
+        if (!TitanBoxRFP.configManager.isJoinMessages()) return;
         FakePlayerManager fakePlayerManager = this;
         new BukkitRunnable() {
             @Override
             public void run() {
-                List<String> firstJoinMessages = TitanBoxRFP.configManager.getReJoinMessages();
-                if (player.getFirstPlayed() + 10000 > System.currentTimeMillis())
+                List<String> firstJoinMessages = null;
+                if (player.getFirstPlayed() + 10000 > System.currentTimeMillis()) {
                     firstJoinMessages = TitanBoxRFP.configManager.getFirstJoinMessages();
-                Random random = new Random(System.currentTimeMillis());
+                }
+                else
+                {
+                    firstJoinMessages = TitanBoxRFP.configManager.getReJoinMessages();
+                }
+                if (firstJoinMessages == null) return;
                 for (FakePlayerInfo entityPlayer : fakePlayerManager.getPlayerInfoList()) {
                     if (random.nextInt(3) < 2 && !player.getName().equals(entityPlayer.getName())) {
                         String message = firstJoinMessages.get(random.nextInt(firstJoinMessages.size()));
+                        if (message == null || message.length() < 1) return;
                         message = message.replace("<name>", player.getName());
                         message = ChatColor.translateAlternateColorCodes('&', message);
                         String finalMessage = message;
@@ -109,17 +117,40 @@ public class FakePlayerManager {
         playerHashMap.put(name, npc);
         playerListFree.add(npc.getEntityPlayer());
         onlineListFree.put(npc.getEntityPlayer().getUniqueID(), npc.getEntityPlayer());
-        //Bukkit.getServer().broadcastMessage(ChatColor.YELLOW + name + " joined the game.");
         ChatMessage chatmessage = new ChatMessage("multiplayer.player.joined", new Object[]{npc.getEntityPlayer().getScoreboardDisplayName()});
         String joinMessage = CraftChatMessage.fromComponent(chatmessage);
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                List<String> groups = TitanBoxRFP.configManager.getGroups();
+                if (groups.size() == 0) {
+                    removeOldGroups(npc);
+                    TitanBoxRFP.permission.playerAddGroup(null, npc.getCraftPlayer(), "default");
+                }
+                else
+                {
+                    removeOldGroups(npc);
+                    TitanBoxRFP.permission.playerAddGroup(null, npc.getCraftPlayer(), groups.get(random.nextInt(groups.size())));
+                }
+                npc.setTextFormat();
+            }
+        }.runTaskLater(TitanBoxRFP.instants, 1);
+
         PlayerJoinEvent playerJoinEvent = new PlayerJoinEvent(npc.getCraftPlayer(), joinMessage);
         Bukkit.getPluginManager().callEvent(playerJoinEvent);
-        joinMessage = ChatColor.YELLOW + ChatColor.translateAlternateColorCodes('&',playerJoinEvent.getJoinMessage());
+
+        String joining = playerJoinEvent.getJoinMessage();
+        if (joining == null || joining.length() < 1) joining = ChatColor.YELLOW + name + " joined the game.";
+        joinMessage = ChatColor.YELLOW + ChatColor.translateAlternateColorCodes('&',joining);
 
         Set<Player> playerSet = new HashSet<Player>(Bukkit.getOnlinePlayers());
         for(Player player: playerSet) {
-            if (TitanBoxRFP.hasAdminPermission(player) || player.hasPermission("titanbox.rfp.show")) {
-                player.sendMessage(joinMessage + " [Fake Player]");
+            if (TitanBoxRFP.configManager.isOpsFakeTag()) {
+                if (TitanBoxRFP.hasAdminPermission(player) || player.hasPermission("titanbox.rfp.show")) {
+                    player.sendMessage(joinMessage + ChatColor.GRAY + " [Fake Player]");
+                } else {
+                    player.sendMessage(joinMessage);
+                }
             }
             else
             {
@@ -128,6 +159,15 @@ public class FakePlayerManager {
         }
         if (welcome) this.welcomePlayer(npc.getCraftPlayer());
     }
+
+    private void removeOldGroups(FakePlayerInfo npc) {
+        String[] oldGroups = TitanBoxRFP.permission.getPlayerGroups(null, npc.getCraftPlayer());
+        for(String g: oldGroups)
+        {
+            TitanBoxRFP.permission.playerRemoveGroup(null, npc.getCraftPlayer(), g);
+        }
+    }
+
     public int count()
     {
         return playerHashMap.size();
@@ -164,17 +204,56 @@ public class FakePlayerManager {
 
                 this.playerListFree.remove(npc.getEntityPlayer());
                 this.onlineListFree.remove(npc.getUniqueID());
-                for(Player all: Bukkit.getOnlinePlayers()) {
-                    ((CraftPlayer) all).getHandle().b.sendPacket(new PacketPlayOutPlayerInfo(PacketPlayOutPlayerInfo.EnumPlayerInfoAction.e, npc.getEntityPlayer())); //REMOVE PLAYER
+
+               /* if (TitanBoxRFP.configManager.isSafeLogging()) {
+
+                    List<EntityPlayer> test = new ArrayList<EntityPlayer>();
+                    test.add(npc.getEntityPlayer());
+
+                    PacketPlayOutPlayerInfo packet = new PacketPlayOutPlayerInfo(PacketPlayOutPlayerInfo.EnumPlayerInfoAction.e, test);
+                    try {
+                        for (Player player : Bukkit.getOnlinePlayers()) {
+                            ((CraftPlayer) player).getHandle().b.sendPacket(packet);
+                        }
+                    } catch (Exception e) {
+
+                    }
+                }
+                else
+                {
+                    try {
+                        for (Player all : Bukkit.getOnlinePlayers()) {
+                            ((CraftPlayer) all).getHandle().b.sendPacket(new PacketPlayOutPlayerInfo(PacketPlayOutPlayerInfo.EnumPlayerInfoAction.e, npc.getEntityPlayer())); //REMOVE PLAYER
+                        }
+                    }
+                    catch (Exception e)
+                    {
+
+                    }
+                }*/
+                try {
+                    for (Player all : Bukkit.getOnlinePlayers()) {
+                        ((CraftPlayer) all).getHandle().b.sendPacket(new PacketPlayOutPlayerInfo(PacketPlayOutPlayerInfo.EnumPlayerInfoAction.e, npc.getEntityPlayer())); //REMOVE PLAYER
+                    }
+                }
+                catch (Exception e)
+                {
+
                 }
                 PlayerQuitEvent playerQuitEvent = new PlayerQuitEvent(npc.getCraftPlayer(), "§e" + npc.getName() + " left the game");
                 Bukkit.getPluginManager().callEvent(playerQuitEvent);
-                String quitMessage = ChatColor.translateAlternateColorCodes('&',playerQuitEvent.getQuitMessage());
+                String quiting = playerQuitEvent.getQuitMessage();
+                if (quiting == null || quiting.length() < 1) quiting = "§e" + npc.getName() + " left the game";
+                String quitMessage = ChatColor.translateAlternateColorCodes('&',quiting);
 
                 Set<Player> playerSet = new HashSet<Player>(Bukkit.getOnlinePlayers());
                 for(Player player: playerSet) {
-                    if (TitanBoxRFP.hasAdminPermission(player) || player.hasPermission("titanbox.rfp.show")) {
-                        player.sendMessage(quitMessage + ChatColor.GRAY + " [Fake Player]");
+                    if (TitanBoxRFP.configManager.isOpsFakeTag()) {
+                        if (TitanBoxRFP.hasAdminPermission(player) || player.hasPermission("titanbox.rfp.show")) {
+                            player.sendMessage(quitMessage + ChatColor.GRAY + " [Fake Player]");
+                        } else {
+                            player.sendMessage(quitMessage);
+                        }
                     }
                     else
                     {

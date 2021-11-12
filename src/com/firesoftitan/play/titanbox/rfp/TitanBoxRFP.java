@@ -6,12 +6,15 @@ import com.firesoftitan.play.titanbox.rfp.managers.AutoUpdateManager;
 import com.firesoftitan.play.titanbox.rfp.managers.ConfigManager;
 import com.firesoftitan.play.titanbox.rfp.managers.FakePlayerManager;
 import com.firesoftitan.play.titanbox.rfp.runnables.AutoLogerRunnable;
+import net.milkbowl.vault.permission.Permission;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.craftbukkit.libs.org.apache.commons.io.FileUtils;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -28,6 +31,7 @@ public class TitanBoxRFP extends JavaPlugin {
     public static TitanBoxRFP instants;
     public static MainListener mainListener;
     public static FakePlayerManager fakePlayerManager;
+    public static Permission permission;
     public static boolean update = false;
     public void onEnable() {
         instants = this;
@@ -40,14 +44,15 @@ public class TitanBoxRFP extends JavaPlugin {
         configManager = new ConfigManager();
         fakePlayerManager = new FakePlayerManager();
 
-
-        if (configManager.isAutoEnable()) {
-            Random random = new Random(System.currentTimeMillis());
-            int min = configManager.getAutoMinimum();
-            int max = configManager.getAutoMaximum() - min;
-            int number = random.nextInt(max) + min;
-            int addN = Math.min(number, configManager.getMaximum());
-            fakePlayerManager.addMore(addN);
+        if (TitanBoxRFP.isVaultInstalled())
+        {
+            RegisteredServiceProvider<Permission> permissionProvider = Bukkit.getServer().getServicesManager().getRegistration(net.milkbowl.vault.permission.Permission.class);
+            permission = permissionProvider.getProvider();
+            sendMessageSystem(TitanBoxRFP.this, "Vault Hooked!");
+        }
+        else
+        {
+            sendMessageSystem(TitanBoxRFP.this, "No Vault Installed!");
         }
 
         new BukkitRunnable() {
@@ -65,7 +70,29 @@ public class TitanBoxRFP extends JavaPlugin {
             }
         }.runTaskLater(this,20);
 
-        if (configManager.isAutoEnable()) new AutoLogerRunnable().runTaskTimer(this, 30*20, 30*20);
+
+        TitanBoxRFP.instants.setupAutoSpawn();
+    }
+
+    public void setupAutoSpawn() {
+        if (configManager.isAutoEnable()) {
+            int delayJoinStartup = configManager.getDelayJoinStartup() * 20;
+            if (delayJoinStartup < 1) delayJoinStartup = 1;
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    Random random = new Random(System.currentTimeMillis());
+                    int min = configManager.getAutoMinimum();
+                    int max = configManager.getAutoMaximum() - min;
+                    if (max < 1) max = 1;
+                    int number = random.nextInt(max) + min;
+                    int addN = Math.min(number, configManager.getMaximum());
+                    fakePlayerManager.addMore(addN);
+                }
+            }.runTaskLater(this, delayJoinStartup);
+
+            new AutoLogerRunnable().runTaskTimer(this, 30*20, 30*20);
+        }
     }
 
     public void createMissingFile(String filename) {
@@ -80,19 +107,36 @@ public class TitanBoxRFP extends JavaPlugin {
             }
         }
     }
-
-    public static boolean hasAdminPermission(Player player)
+    public static boolean isVaultInstalled()
     {
-        if (player.hasPermission("titanbox.rfp.admin") ||player.hasPermission("titanbox.admin") || player.isOp()) return true;
+        Plugin vault = Bukkit.getPluginManager().getPlugin("Vault");
+        return vault != null;
+    }
+    public static boolean hasAdminPermission(CommandSender sender)
+    {
+        if (sender.hasPermission("titanbox.rfp.admin") || sender.hasPermission("titanbox.admin") || sender.isOp()) return true;
         return false;
     }
-
-    public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
+    public void sendMessage(CommandSender sender, String text)
+    {
         if (sender instanceof Player) {
             final Player player = (Player) sender;
+            sendMessagePlayer(this, player,  text);
+        }
+        else
+        {
+            sendMessageSystem(this, text);
+        }
+    }
+    public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
             if (args.length > 0)
             {
-                if (TitanBoxRFP.hasAdminPermission(player)) {
+                if (!(sender instanceof Player) || TitanBoxRFP.hasAdminPermission((Player) sender)) {
+                    if (args[0].equalsIgnoreCase("reload")) {
+                        configManager.reload();
+                        sendMessage(sender,ChatColor.AQUA + "Config has been reloaded!");
+                        return true;
+                    }
                     if (args[0].equalsIgnoreCase("add")) {
                         if (args.length > 1) {
                             if (TitanBoxRFP.isNumber(args[1])) {
@@ -100,48 +144,48 @@ public class TitanBoxRFP extends JavaPlugin {
                                 int addN = Math.min(number, configManager.getMaximum() - fakePlayerManager.count());
                                 if (addN < 1)
                                 {
-                                    sendMessagePlayer(this, player,  ChatColor.AQUA + "You have reached the max, you can change this in the settings.");
+                                    sendMessage(sender,   ChatColor.AQUA + "You have reached the max, you can change this in the settings.");
                                     return true;
                                 }
                                 fakePlayerManager.addMore(addN);
-                                sendMessagePlayer(this, player, ChatColor.WHITE + "" + addN + "" + ChatColor.AQUA + " players have been added.");
+                                sendMessage(sender,  ChatColor.WHITE + "" + addN + "" + ChatColor.AQUA + " players have been added.");
                             } else {
                                 if (fakePlayerManager.count() >= configManager.getMaximum())
                                 {
-                                    sendMessagePlayer(this, player,  ChatColor.AQUA + "You have reached the max, you can change this in the settings.");
+                                    sendMessage(sender,   ChatColor.AQUA + "You have reached the max, you can change this in the settings.");
                                     return true;
                                 }
                                 fakePlayerManager.add(args[1], true);
                                 for(Player all: Bukkit.getOnlinePlayers()) {
                                     fakePlayerManager.showList(all);
                                 }
-                                sendMessagePlayer(this, player, ChatColor.WHITE + args[1] + ChatColor.AQUA + " player has been added.");
+                                sendMessage(sender,  ChatColor.WHITE + args[1] + ChatColor.AQUA + " player has been added.");
                             }
                             return true;
                         }
-                        sendMessagePlayer(this, player, ChatColor.GOLD + "/rfp add <#,name>");
-                        sendMessagePlayer(this, player, ChatColor.GRAY + "Example: " + ChatColor.WHITE + "/rfp add 12 " + ChatColor.GRAY + "or" + ChatColor.WHITE + " /rfp add mice");
+                        sendMessage(sender,  ChatColor.GOLD + "/rfp add <#,name>");
+                        sendMessage(sender,  ChatColor.GRAY + "Example: " + ChatColor.WHITE + "/rfp add 12 " + ChatColor.GRAY + "or" + ChatColor.WHITE + " /rfp add mice");
                         return true;
                     }
                     if (args[0].equalsIgnoreCase("remove")) {
                         if (args.length > 1) {
                             if (args[1].equalsIgnoreCase("all")) {
                                 fakePlayerManager.removeAll();
-                                sendMessagePlayer(this, player, ChatColor.AQUA + "all players have been removed.");
+                                sendMessage(sender,  ChatColor.AQUA + "all players have been removed.");
                             } else {
                                 if (fakePlayerManager.contains(args[1])) {
                                     fakePlayerManager.remove(args[1]);
-                                    sendMessagePlayer(this, player, ChatColor.WHITE + args[1] + ChatColor.AQUA + " player has been removed.");
+                                    sendMessage(sender,  ChatColor.WHITE + args[1] + ChatColor.AQUA + " player has been removed.");
                                 }
                                 else
                                 {
-                                    sendMessagePlayer(this, player, ChatColor.WHITE + args[1] + ChatColor.AQUA + " no player with that name.");
+                                    sendMessage(sender,  ChatColor.WHITE + args[1] + ChatColor.AQUA + " no player with that name.");
                                 }
                             }
                             return true;
                         }
-                        sendMessagePlayer(this, player, ChatColor.GOLD + "/rfp remove <all,name>");
-                        sendMessagePlayer(this, player, ChatColor.GRAY + "Example: " + ChatColor.WHITE + "/rfp remove all " + ChatColor.GRAY + "or" + ChatColor.WHITE + " /rfp remove mice");
+                        sendMessage(sender,  ChatColor.GOLD + "/rfp remove <all,name>");
+                        sendMessage(sender,  ChatColor.GRAY + "Example: " + ChatColor.WHITE + "/rfp remove all " + ChatColor.GRAY + "or" + ChatColor.WHITE + " /rfp remove mice");
                         return true;
                     }
                     if (args[0].equalsIgnoreCase("list")) {
@@ -149,30 +193,27 @@ public class TitanBoxRFP extends JavaPlugin {
                         for (FakePlayerInfo entityPlayer : fakePlayerManager.getPlayerInfoList()) {
                             names.add(entityPlayer.getName());
                         }
-                        sendMessagePlayer(this, player, names);
+                        sendMessageList(this, sender,  names);
                         return true;
                     }
                 }
             }
-        }
-        else
-        {
-
-        }
         this.help(sender);
         return true;
     }
-    public void help(CommandSender player)
+    public void help(CommandSender sender)
     {
         List<String> commandHelp = new ArrayList<String>();
 
-        if (player.hasPermission("titanbox.admin")) commandHelp.add(ChatColor.GOLD + "/rfp help");
-        if (player.hasPermission("titanbox.admin")) commandHelp.add(ChatColor.GOLD + "/rfp add <#,name>");
-        if (player.hasPermission("titanbox.admin")) commandHelp.add(ChatColor.GOLD + "/rfp remove <all,name>");
-        if (player.hasPermission("titanbox.admin")) commandHelp.add(ChatColor.GOLD + "/rfp list");
-
-
-        TitanBoxRFP.sendMessagePlayer(this, (Player) player, commandHelp);
+        if (TitanBoxRFP.hasAdminPermission(sender)) commandHelp.add(ChatColor.GOLD + "/rfp help");
+        if (TitanBoxRFP.hasAdminPermission(sender)) commandHelp.add(ChatColor.GOLD + "/rfp add <#>");
+        if (TitanBoxRFP.hasAdminPermission(sender)) commandHelp.add(ChatColor.GOLD + "/rfp add <name>");
+        if (TitanBoxRFP.hasAdminPermission(sender)) commandHelp.add(ChatColor.GOLD + "/rfp remove <name>");
+        if (TitanBoxRFP.hasAdminPermission(sender)) commandHelp.add(ChatColor.GOLD + "/rfp remove all");
+        if (TitanBoxRFP.hasAdminPermission(sender)) commandHelp.add(ChatColor.GOLD + "/rfp list");
+        if (TitanBoxRFP.hasAdminPermission(sender)) commandHelp.add(ChatColor.GOLD + "/rfp reload");
+        if (TitanBoxRFP.hasAdminPermission(sender) || sender.hasPermission("titanbox.rfp.show") || sender.isOp()) commandHelp.add(ChatColor.GOLD + "You can see " + ChatColor.GRAY + " [Fake Player]" + ChatColor.GOLD + " label");
+        TitanBoxRFP.sendMessageList(this, sender, commandHelp);
     }
     public static boolean isNumber(String message)
     {
@@ -193,10 +234,18 @@ public class TitanBoxRFP extends JavaPlugin {
         plugin.getLogger().log(level,  ChatColor.RESET + ChatColor.translateAlternateColorCodes('&', message));
         //ChatColor.GREEN + "("+ ChatColor.AQUA + subName + ChatColor.GREEN + "): " +
     }
-    public static void sendMessagePlayer(JavaPlugin plugin, Player player, List<String> messages)
+    public static void sendMessageList(JavaPlugin plugin, CommandSender sender, List<String> messages)
     {
         String subName = plugin.getName().replace("TitanBox", "");
-        if (player == null || !player.isOnline())
+        if (sender instanceof Player) {
+            Player player = (Player) sender;
+            player.sendMessage(ChatColor.GRAY + "" + ChatColor.BOLD + ChatColor.STRIKETHROUGH + "-------------" + ChatColor.RESET + ChatColor.GREEN + "[" + ChatColor.BLUE + "TitanBox" + ChatColor.GREEN + "](" + ChatColor.AQUA + subName + ChatColor.GREEN + ")" + ChatColor.GRAY + "" + ChatColor.BOLD + ChatColor.STRIKETHROUGH + "-------------");
+            for (String s : messages) {
+                player.sendMessage(ChatColor.translateAlternateColorCodes('&', s));
+            }
+            player.sendMessage(ChatColor.GRAY + "" + ChatColor.BOLD + ChatColor.STRIKETHROUGH + "-------------" + "-------------");
+        }
+        else
         {
             TitanBoxRFP.sendMessageSystem(plugin,ChatColor.GRAY + "" +ChatColor.BOLD +  ChatColor.STRIKETHROUGH + "-------------" + ChatColor.RESET + ChatColor.GREEN + "[" + ChatColor.BLUE + "TitanBox" + ChatColor.GREEN + "]("+ ChatColor.AQUA + subName + ChatColor.GREEN + ")" + ChatColor.GRAY + "" +ChatColor.BOLD +  ChatColor.STRIKETHROUGH + "-------------");
             for(String s: messages) {
@@ -205,21 +254,15 @@ public class TitanBoxRFP extends JavaPlugin {
             TitanBoxRFP.sendMessageSystem(plugin,ChatColor.GRAY + "" +ChatColor.BOLD +  ChatColor.STRIKETHROUGH + "-------------" + "-------------");
             return;
         }
-
-        player.sendMessage(ChatColor.GRAY + "" +ChatColor.BOLD +  ChatColor.STRIKETHROUGH + "-------------" + ChatColor.RESET + ChatColor.GREEN + "[" + ChatColor.BLUE + "TitanBox" + ChatColor.GREEN + "]("+ ChatColor.AQUA + subName + ChatColor.GREEN + ")" + ChatColor.GRAY + "" +ChatColor.BOLD +  ChatColor.STRIKETHROUGH + "-------------");
-        for(String s: messages) {
-            player.sendMessage(ChatColor.translateAlternateColorCodes('&', s));
-        }
-        player.sendMessage(ChatColor.GRAY + "" +ChatColor.BOLD +  ChatColor.STRIKETHROUGH + "-------------" + "-------------");
     }
-    public static void sendMessagePlayer(JavaPlugin plugin, Player player, String... messages)
+    public static void sendMessageList(JavaPlugin plugin, Player player, String... messages)
     {
         List<String> mes = new ArrayList<String>();
         for(String s: messages)
         {
             mes.add(s);
         }
-        sendMessagePlayer(plugin, player, mes);
+        sendMessageList(plugin, player, mes);
     }
     public static void sendMessagePlayer(JavaPlugin plugin, Player player, String message)
     {

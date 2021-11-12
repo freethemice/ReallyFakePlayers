@@ -1,7 +1,7 @@
 package com.firesoftitan.play.titanbox.rfp.info;
 
 import com.firesoftitan.play.titanbox.rfp.TitanBoxRFP;
-import com.firesoftitan.play.titanbox.rfp.managers.FakeNetworkManager;
+import com.firesoftitan.play.titanbox.rfp.fakes.FakeNetworkManager;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 import com.mojang.authlib.properties.PropertyMap;
@@ -17,6 +17,8 @@ import org.bukkit.craftbukkit.v1_17_R1.CraftServer;
 import org.bukkit.craftbukkit.v1_17_R1.CraftWorld;
 import org.bukkit.craftbukkit.v1_17_R1.entity.CraftPlayer;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.scheduler.BukkitRunnable;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -115,6 +117,24 @@ public class FakePlayerInfo {
     }
     private EntityPlayer entityPlayer;
     private long joinTime;
+    private String textFormat = null;
+
+    public void setTextFormat() {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                Set<Player> playerSet = new HashSet<Player>(Bukkit.getOnlinePlayers());
+                AsyncPlayerChatEvent asyncPlayerChatEvent = new AsyncPlayerChatEvent(false, getCraftPlayer(), "<message>", playerSet);
+                Bukkit.getPluginManager().callEvent(asyncPlayerChatEvent);
+                String formatted = String.format(asyncPlayerChatEvent.getFormat(), "<fakename>", asyncPlayerChatEvent.getMessage());
+                formatted = formatted.replace(getCraftPlayer().getDisplayName(), "<fakename>");
+                formatted = formatted.replace(getCraftPlayer().getName(), "<fakename>");
+                formatted = formatted.replace('§', '&');
+                textFormat = formatted;
+            }
+        }.runTaskLater(TitanBoxRFP.instants, 1);
+
+    }
 
     public FakePlayerInfo(String name) {
         setupPlayer(name, UUID.randomUUID());
@@ -130,11 +150,11 @@ public class FakePlayerInfo {
         if (name.length() > 16) name = name.substring(0, 16);
         GameProfile gameProfile = new GameProfile(uuid, name);
         this.entityPlayer = new EntityPlayer(nmsServer, nmsWorld, gameProfile);
-        this.entityPlayer.b = new PlayerConnection(nmsServer, new FakeNetworkManager(EnumProtocolDirection.a), this.entityPlayer);
+        Random random = new Random(System.currentTimeMillis());
+        this.entityPlayer.e =  random.nextInt(10)+ 20;
+        FakeNetworkManager networkmanager = new FakeNetworkManager(EnumProtocolDirection.a);
+        this.entityPlayer.b = new PlayerConnection(nmsServer, networkmanager, this.entityPlayer);
         this.joinTime = System.currentTimeMillis();
-
-        //update(UUID.fromString("aa88b6c8-b31d-4282-b423-0adc5f331ba2"));
-
 
     }
 
@@ -150,6 +170,10 @@ public class FakePlayerInfo {
     {
         return this.entityPlayer.b;
     }
+    public FakeNetworkManager getFakeNetworkManager()
+    {
+        return (FakeNetworkManager) this.entityPlayer.b.a;
+    }
     public EntityPlayer getEntityPlayer() {
         return entityPlayer;
     }
@@ -157,6 +181,7 @@ public class FakePlayerInfo {
     {
         return entityPlayer.getBukkitEntity();
     }
+
     private void loadSkinToServer(UUID uuid)
     {
         String name = uuid.toString();
@@ -166,7 +191,7 @@ public class FakePlayerInfo {
         if (name.length() > 16) name = name.substring(0, 16);
         GameProfile gameProfile = new GameProfile(uuid, name);
         EntityPlayer entityPlayer = new EntityPlayer(nmsServer, nmsWorld, gameProfile);
-        entityPlayer.b = new PlayerConnection(nmsServer, new FakeNetworkManager(EnumProtocolDirection.a), this.entityPlayer);
+        entityPlayer.b = new PlayerConnection(nmsServer, new FakeNetworkManager(EnumProtocolDirection.a), entityPlayer);
     }
     public void setSkin( UUID skin)
     {
@@ -195,15 +220,18 @@ public class FakePlayerInfo {
     {
         Set<Player> playerSet = new HashSet<Player>(Bukkit.getOnlinePlayers());
 
-        String formattedMessage = TitanBoxRFP.configManager.getTextFormat();
+        String formattedMessage = textFormat;
         if (formattedMessage == null || formattedMessage.length() < 1) return;
         formattedMessage = formattedMessage.replace("<message>", message);
         formattedMessage = formattedMessage.replace("<fakename>", this.getName());
         for(Player player: playerSet)
         {
-            if (TitanBoxRFP.hasAdminPermission(player) || player.hasPermission("titanbox.rfp.show"))
-            {
-                player.sendMessage(ChatColor.translateAlternateColorCodes('&', formattedMessage) + ChatColor.GRAY +" [" +  "I'm Fake]");
+            if (TitanBoxRFP.configManager.isOpsFakeTag()) {
+                if (TitanBoxRFP.hasAdminPermission(player) || player.hasPermission("titanbox.rfp.show")) {
+                    player.sendMessage(ChatColor.translateAlternateColorCodes('&', formattedMessage) + ChatColor.GRAY + " [" + "I'm Fake]");
+                } else {
+                    player.sendMessage(ChatColor.translateAlternateColorCodes('&', formattedMessage));
+                }
             }
             else
             {

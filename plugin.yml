@@ -1,8 +1,8 @@
 name: TitanBoxRFP
 main: com.firesoftitan.play.titanbox.rfp.TitanBoxRFP
-version: 1.5.1_171
+version: 1.11.1_171
 author: [freethemice]
-depend: [Slimefun]
+softdepend: [Vault]
 api-version: 1.13
 commands:
   TRFP:
